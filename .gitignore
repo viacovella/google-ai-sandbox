@@ -1,0 +1,5 @@
+config.py
+dati.csv
+dataset_corrente.csv
+.venv/
+__pycache__/

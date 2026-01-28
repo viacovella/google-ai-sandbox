@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Data Analyst Bot</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 0; height: 100vh; display: flex; }
+        
+        #left-panel { width: 40%; padding: 20px; border-right: 1px solid #ccc; display: flex; flex-direction: column; background-color: #f9f9f9;}
+        #right-panel { width: 60%; padding: 20px; display: flex; flex-direction: column; }
+
+        /* Area Upload */
+        .upload-section { background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 20px; }
+        .upload-section h3 { margin-top: 0; }
+
+        /* Stili Chat */
+        #chat-box { flex-grow: 1; border: 1px solid #ddd; overflow-y: scroll; padding: 10px; margin-bottom: 10px; border-radius: 5px; background: white;}
+        .message { margin: 5px 0; padding: 8px; border-radius: 5px; font-size: 0.9em; }
+        .user { background-color: #e1f5fe; text-align: right; }
+        .bot { background-color: #f1f1f1; text-align: left; }
+        
+        .input-area { display: flex; }
+        input[type="text"] { flex-grow: 1; padding: 10px; }
+        button { padding: 10px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+
+    <div id="left-panel">
+        
+        <div class="upload-section">
+            <h3>📂 Carica Dataset</h3>
+            <input type="file" id="csv-file-input" accept=".csv">
+            <button onclick="uploadFile()" style="margin-top: 10px; width: 100%;">Carica CSV</button>
+            <p id="upload-status" style="font-size: 0.8em; color: gray; margin-top: 5px;"></p>
+        </div>
+
+        <h3>📊 Visualizzazione</h3>
+        <div id="chart-container" style="width:100%; height:100%; background: white; border: 1px solid #ddd;">
+            <p style="text-align:center; color:gray; padding-top: 50px;">Il grafico apparirà qui</p>
+        </div>
+    </div>
+
+    <div id="right-panel">
+        <h2>Chat Analisi</h2>
+        <div id="chat-box"></div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="Chiedi qualcosa sui dati...">
+            <button onclick="sendMessage()">Invia</button>
+        </div>
+    </div>
+
+    <script>
+        // --- FUNZIONE PER CARICARE IL FILE ---
+        async function uploadFile() {
+            const fileInput = document.getElementById('csv-file-input');
+            const statusText = document.getElementById('upload-status');
+
+            if (fileInput.files.length === 0) {
+                alert("Seleziona prima un file CSV!");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            statusText.innerText = "Caricamento in corso...";
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+
+                if (response.ok) {
+                    statusText.innerText = "✅ Dataset caricato! Chat resettata.";
+                    statusText.style.color = "green";
+                    
+                    // Puliamo la chat visiva perché il server ha resettato la memoria
+                    document.getElementById('chat-box').innerHTML = '<div class="message bot"><strong>Sistema:</strong> Nuovi dati caricati. Cosa vuoi sapere?</div>';
+                    // Puliamo il grafico vecchio
+                    document.getElementById('chart-container').innerHTML = '';
+                } else {
+                    statusText.innerText = "❌ Errore: " + result.error;
+                    statusText.style.color = "red";
+                }
+            } catch (error) {
+                console.error(error);
+                statusText.innerText = "❌ Errore di connessione.";
+            }
+        }
+
+        // --- FUNZIONE CHAT (Invariata) ---
+        async function sendMessage() {
+            const inputField = document.getElementById('user-input');
+            const message = inputField.value;
+            const chatBox = document.getElementById('chat-box');
+
+            if (!message) return;
+
+            chatBox.innerHTML += `<div class="message user"><strong>Tu:</strong> ${message}</div>`;
+            inputField.value = '';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+
+                if (data.text) {
+                    chatBox.innerHTML += `<div class="message bot"><strong>Gemini:</strong> ${data.text}</div>`;
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+
+                if (data.plot && typeof Plotly !== 'undefined') {
+                    document.getElementById('chart-container').innerHTML = ''; 
+                    Plotly.newPlot('chart-container', data.plot.data, data.plot.layout);
+                }
+            } catch (error) {
+                chatBox.innerHTML += `<div class="message bot" style="color:red">Errore server.</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
